@@ -1,0 +1,13 @@
+{
+  "region": null,
+  "key_hold_ms": 6,
+  "key_interval_ms": 8,
+  "inter_word_ms": 20,
+  "danger_y_ratio": 0.58,
+  "hud_top_ratio": 0.09,
+  "min_confidence": 0.40,
+  "raw_confidence": 0.80,
+  "retry_delay_ms": 200,
+  "retries": 1,
+  "match_radius": 170
+}

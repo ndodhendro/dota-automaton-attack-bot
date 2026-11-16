@@ -1,0 +1,358 @@
+# One label per line, written the way Dota shows it.
+# The bot types letters and digits only. Spaces and punctuation are removed.
+# Add a line here if a word is misread. Lines starting with # are ignored.
+
+# Heroes
+Abaddon
+Alchemist
+Ancient Apparition
+Anti-Mage
+Arc Warden
+Axe
+Bane
+Batrider
+Beastmaster
+Bloodseeker
+Bounty Hunter
+Brewmaster
+Bristleback
+Broodmother
+Centaur Warrunner
+Chaos Knight
+Chen
+Clinkz
+Clockwerk
+Crystal Maiden
+Dark Seer
+Dark Willow
+Dawnbreaker
+Dazzle
+Death Prophet
+Disruptor
+Doom
+Dragon Knight
+Drow Ranger
+Earth Spirit
+Earthshaker
+Elder Titan
+Ember Spirit
+Enchantress
+Enigma
+Faceless Void
+Grimstroke
+Gyrocopter
+Hoodwink
+Huskar
+Invoker
+Io
+Jakiro
+Juggernaut
+Keeper of the Light
+Kez
+Kunkka
+Legion Commander
+Leshrac
+Lich
+Lifestealer
+Lina
+Lion
+Lone Druid
+Luna
+Lycan
+Magnus
+Marci
+Mars
+Medusa
+Meepo
+Mirana
+Monkey King
+Morphling
+Muerta
+Naga Siren
+Nature's Prophet
+Necrophos
+Night Stalker
+Nyx Assassin
+Ogre Magi
+Omniknight
+Oracle
+Outworld Destroyer
+Outworld Devourer
+Pangolier
+Phantom Assassin
+Phantom Lancer
+Phoenix
+Primal Beast
+Puck
+Pudge
+Pugna
+Queen of Pain
+Razor
+Riki
+Ringmaster
+Rubick
+Sand King
+Shadow Demon
+Shadow Fiend
+Shadow Shaman
+Silencer
+Skywrath Mage
+Slardar
+Slark
+Snapfire
+Sniper
+Spectre
+Spirit Breaker
+Storm Spirit
+Sven
+Techies
+Templar Assassin
+Terrorblade
+Tidehunter
+Timbersaw
+Tinker
+Tiny
+Treant Protector
+Troll Warlord
+Tusk
+Underlord
+Undying
+Ursa
+Vengeful Spirit
+Venomancer
+Viper
+Visage
+Void Spirit
+Warlock
+Weaver
+Windranger
+Winter Wyvern
+Witch Doctor
+Wraith King
+Zeus
+
+# Items
+Abyssal Blade
+Aegis of the Immortal
+Aeon Disk
+Aether Lens
+Aghanim's Scepter
+Aghanim's Shard
+Arcane Blink
+Arcane Boots
+Armlet of Mordiggian
+Assault Cuirass
+Band of Elvenskin
+Battle Fury
+Belt of Strength
+Black King Bar
+Blade Mail
+Blade of Alacrity
+Blades of Attack
+Blight Stone
+Blink Dagger
+Blood Grenade
+Bloodstone
+Bloodthorn
+Boots of Bearing
+Boots of Speed
+Boots of Travel
+Bottle
+Bracer
+Broadsword
+Buckler
+Butterfly
+Chainmail
+Cheese
+Circlet
+Clarity
+Claymore
+Cloak
+Cornucopia
+Crimson Guard
+Crown
+Crystalys
+Daedalus
+Demon Edge
+Desolator
+Diadem
+Diffusal Blade
+Disperser
+Divine Rapier
+Dragon Lance
+Drum of Endurance
+Dust of Appearance
+Eaglesong
+Echo Sabre
+Enchanted Mango
+Energy Booster
+Eternal Shroud
+Ethereal Blade
+Eul's Scepter of Divinity
+Eye of Skadi
+Faerie Fire
+Falcon Blade
+Fluffy Hat
+Force Staff
+Gauntlets of Strength
+Gem of True Sight
+Ghost Scepter
+Glimmer Cape
+Gloves of Haste
+Guardian Greaves
+Hand of Midas
+Harpoon
+Headdress
+Healing Salve
+Heart of Tarrasque
+Heaven's Halberd
+Helm of Iron Will
+Helm of the Dominator
+Helm of the Overlord
+Holy Locket
+Hood of Defiance
+Hurricane Pike
+Hyperstone
+Infused Raindrop
+Iron Branch
+Javelin
+Kaya
+Kaya and Sange
+Khanda
+Linken's Sphere
+Lotus Orb
+Maelstrom
+Mage Slayer
+Magic Stick
+Magic Wand
+Manta Style
+Mantle of Intelligence
+Mask of Madness
+Medallion of Courage
+Mekansm
+Meteor Hammer
+Mithril Hammer
+Mjollnir
+Monkey King Bar
+Moon Shard
+Mystic Staff
+Null Talisman
+Nullifier
+Oblivion Staff
+Observer Ward
+Octarine Core
+Ogre Axe
+Orb of Corrosion
+Orb of Venom
+Orchid Malevolence
+Overwhelming Blink
+Parasma
+Pavise
+Perseverance
+Phase Boots
+Phylactery
+Pipe of Insight
+Platemail
+Point Booster
+Power Treads
+Quelling Blade
+Radiance
+Reaver
+Refresher Orb
+Refresher Shard
+Revenant's Brooch
+Ring of Basilius
+Ring of Health
+Ring of Protection
+Ring of Regen
+Robe of the Magi
+Rod of Atos
+Sacred Relic
+Sage's Mask
+Sange
+Sange and Yasha
+Satanic
+Scythe of Vyse
+Sentry Ward
+Shadow Amulet
+Shadow Blade
+Shiva's Guard
+Silver Edge
+Slippers of Agility
+Smoke of Deceit
+Solar Crest
+Soul Booster
+Soul Ring
+Spirit Vessel
+Staff of Wizardry
+Swift Blink
+Tango
+Town Portal Scroll
+Tranquil Boots
+Ultimate Orb
+Urn of Shadows
+Vanguard
+Veil of Discord
+Vitality Booster
+Vladmir's Offering
+Void Stone
+Voodoo Mask
+Wind Lace
+Wind Waker
+Witch Blade
+Wraith Band
+Yasha
+Yasha and Kaya
+
+# Common ability and talent labels
+Arena of Blood
+Assassinate
+Battle Trance
+Black Hole
+Burrowstrike
+Chaotic Offering
+Chronosphere
+Coup de Grace
+Dream Coil
+Duel
+Echo Slam
+Eclipse
+Epicenter
+Eye of the Storm
+Fiend's Grip
+Finger of Death
+Flaming Lasso
+Freezing Field
+Ghostship
+God's Strength
+Gods Strength
+Haunt
+Ice Blast
+Juxtapose
+Laguna Blade
+Life Break
+Macropyre
+Moonlight Shadow
+Overgrowth
+Phantom Rush
+Poison Nova
+Press the Attack
+Reaper's Scythe
+Reality Rift
+Requiem of Souls
+Reverse Polarity
+Rolling Boulder
+Sacred Arrow
+Sanity's Eclipse
+Sonic Wave
+Spell Steal
+Stampede
+Starstorm
+Static Storm
+Stone Gaze
+Summon Familiars
+Supernova
+Thundergod's Wrath
+Time Lapse
+Wall of Replica
+Winter's Curse
