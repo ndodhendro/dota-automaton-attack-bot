@@ -1,4 +1,4 @@
-# Automaton Attack Bot
+# Dota Automaton Attack Bot
 
 Bot untuk mini-game **Automaton Attack** di event Dota 2 Dark Carnival. Bot memotret papan permainan, membaca label yang jatuh ke arah Hoodwink, lalu mengetiknya.
 

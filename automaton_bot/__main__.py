@@ -13,9 +13,9 @@ except Exception:
 
 def _hold_on_error() -> None:
     print()
-    print("Bot berhenti karena error di atas.")
+    print("The bot stopped because of the error above.")
     try:
-        input("Tekan Enter untuk menutup jendela ini...")
+        input("Press Enter to close this window...")
     except EOFError:
         pass
 

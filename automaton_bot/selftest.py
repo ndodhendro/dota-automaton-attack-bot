@@ -178,4 +178,4 @@ def run() -> None:
     repaired = fresh_tracker.observe(Det("tidehunter", 0.95, 32, 304, 90, 16, True, "tidehunter"), now=5.05)
     _check(repaired is typed_typo and repaired.pending == "hunter", "a stuck typo is finished, not retyped")
 
-    print("self-test ok")
+    print("Self-test passed.")

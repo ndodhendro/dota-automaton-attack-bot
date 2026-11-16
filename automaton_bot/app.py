@@ -35,6 +35,11 @@ VK = {
     "END": 0x23,
 }
 
+_BANNER = r""" _  _    _         _
+| \| |__| |___  __| |
+| .` / _` / _ \/ _` |
+|_|\_\__,_\___/\__,_|"""
+
 
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
@@ -54,18 +59,28 @@ def main(argv: list[str] | None = None) -> int:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Automaton Attack typing bot")
-    parser.add_argument("--self-test", action="store_true", help="jalankan tes logika tanpa layar")
-    parser.add_argument("--test-image", type=str, help="uji OCR pada satu screenshot, tanpa mengetik")
+    parser.add_argument("--self-test", action="store_true", help="run the logic tests without a screen")
+    parser.add_argument("--test-image", type=str, help="test OCR on one screenshot, without typing")
     return parser
 
 
 def _prepare_console() -> None:
-    ctypes.windll.kernel32.SetConsoleTitleW("Automaton Attack Bot")
-    handle = ctypes.windll.kernel32.GetStdHandle(-10)
+    ctypes.windll.kernel32.SetConsoleTitleW("Dota Automaton Attack Bot")
+    kernel = ctypes.windll.kernel32
     mode = wintypes.DWORD()
-    if ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+    stdin = kernel.GetStdHandle(-10)
+    if kernel.GetConsoleMode(stdin, ctypes.byref(mode)):
         # Quick Edit membekukan proses kalau console diklik.
-        ctypes.windll.kernel32.SetConsoleMode(handle, (mode.value | 0x0080) & ~0x0040)
+        kernel.SetConsoleMode(stdin, (mode.value | 0x0080) & ~0x0040)
+    stdout = kernel.GetStdHandle(-11)
+    if kernel.GetConsoleMode(stdout, ctypes.byref(mode)):
+        kernel.SetConsoleMode(stdout, mode.value | 0x0004)
+
+
+def _print_banner() -> None:
+    print()
+    print("\033[90m" + _BANNER + "\033[0m")
+    print()
 
 
 def _live(cfg: dict) -> int:
@@ -85,30 +100,22 @@ def _live(cfg: dict) -> int:
         "started": None,
     }
     keys = _KeyEdge()
+    _print_banner()
+    print("F8   start or stop typing")
+    print("F7   preview detection boxes without typing")
+    print("F9   calibrate the area")
+    print("F10  save a debug screenshot")
+    print("End  exit")
+    print("Move the cursor to the top-left corner for an emergency stop")
     print()
-    print("Automaton Attack bot siap.")
-    print(f"Area: {region['width']}x{region['height']} di ({region['left']}, {region['top']})")
-    if cfg.get("region"):
-        print(f"Area kalibrasi dipakai dari {CONFIG_PATH.name}.")
-    else:
-        print("Area default dari screenshot 1920x1080. Tekan F9 kalau kotaknya meleset.")
-    print(f"Kamus: {len(lexicon.words)} kata. Kata di luar kamus tetap diketik kalau OCR yakin.")
-    print()
-    print("F8   mulai / berhenti mengetik")
-    print("F7   preview kotak deteksi, tanpa mengetik")
-    print("F9   kalibrasi area")
-    print("F10  simpan gambar debug")
-    print("End  keluar")
-    print("Pojok kiri-atas mouse = stop darurat")
-    print()
-    print("Fokuskan Dota, mulai mini-game, lalu tekan F8.")
-    print("Jangan klik jendela console ini saat bot sedang mengetik.")
+    print("Focus on the Dota client, start the mini-game, then press F8.")
+    print("Do not switch apps while the bot is typing.")
 
     try:
         while True:
             events = keys.poll()
             if "END" in events:
-                print("Keluar.")
+                print("Exiting.")
                 break
             if "F8" in events:
                 state["armed"] = not state["armed"]
@@ -117,10 +124,10 @@ def _live(cfg: dict) -> int:
                     state["started"] = time.perf_counter()
                     state["focus_warned"] = False
                     _close_preview(state)
-                    print("MENGETIK AKTIF. Fokus harus di Dota.")
+                    print("TYPING ACTIVE. Focus must stay on Dota.")
                 else:
                     _report(state)
-                    print("Mengetik berhenti.")
+                    print("Typing stopped.")
             if "F9" in events:
                 was = state["armed"]
                 state["armed"] = False
@@ -130,19 +137,19 @@ def _live(cfg: dict) -> int:
                     save_config(cfg)
                     state["region"] = chosen
                     state["tracker"] = _new_tracker(cfg)
-                    print(f"Area disimpan: {chosen['width']}x{chosen['height']} di ({chosen['left']}, {chosen['top']})")
+                    print(f"Area saved: {chosen['width']}x{chosen['height']} at ({chosen['left']}, {chosen['top']})")
                 else:
-                    print("Kalibrasi dibatalkan.")
+                    print("Calibration canceled.")
                     state["armed"] = was
             if "F7" in events:
                 state["preview"] = not state["preview"]
-                print("Preview hidup." if state["preview"] else "Preview mati.")
+                print("Preview on." if state["preview"] else "Preview off.")
                 if not state["preview"]:
                     _close_preview(state)
             if mouse_in_failsafe_corner() and state["armed"]:
                 state["armed"] = False
                 _report(state)
-                print("Stop darurat. Mouse ada di pojok kiri-atas.")
+                print("Emergency stop. The cursor is in the top-left corner.")
 
             need_frame = state["armed"] or state["preview"] or "F10" in events
             if not need_frame:
@@ -152,24 +159,24 @@ def _live(cfg: dict) -> int:
             frame = screen.grab(state["region"])
             if "F10" in events:
                 _dump(frame, None, [], "manual")
-                print("Gambar debug tersimpan di folder debug.")
+                print("Debug image saved in the debug folder.")
 
             if not state["armed"] and not state["preview"]:
                 time.sleep(0.03)
                 continue
 
             if reader is None:
-                print("Memuat model OCR. Pertama kali bisa mengunduh beberapa MB...")
+                print("Loading the OCR model. The first run may download a few MB...")
                 from automaton_bot.vision import Reader
 
                 reader = Reader()
-                print("Model siap.")
+                print("Model ready.")
 
             found = _process_frame(frame, reader, lexicon, cfg, state)
             if not found:
                 time.sleep(0.02)
     except KeyboardInterrupt:
-        print("\nDihentikan.")
+        print("\nStopped.")
     finally:
         _close_preview(state)
         _report(state)
@@ -206,7 +213,7 @@ def _recognize(reader, frame, blobs, lexicon: Lexicon, cfg: dict):
     try:
         pieces = reader.read_blobs(frame, blobs)
     except Exception as exc:
-        print(f"OCR gagal: {exc}")
+        print(f"OCR failed: {exc}")
         return []
     return to_detections(
         group_phrases(pieces),
@@ -220,7 +227,7 @@ def _highlights(reader, frame, cfg: dict) -> list[str]:
     try:
         blobs = highlights(frame, float(cfg["hud_top_ratio"]))
     except Exception as exc:
-        print(f"Sorotan gagal: {exc}")
+        print(f"Highlight detection failed: {exc}")
         return []
     found: list[str] = []
     for blob in blobs:
@@ -269,7 +276,7 @@ def _emit(det, track, send: str, state: dict, correction: bool) -> bool:
     """Type one string. Return False when typing had to stop."""
     if foreground_is_us():
         if not state["focus_warned"]:
-            print("Fokuskan jendela Dota. Ketikan ditunda selama console ini yang di depan.")
+            print("Focus the Dota window. Typing is paused while this console is in the foreground.")
             state["focus_warned"] = True
         return False
     state["focus_warned"] = False
@@ -279,19 +286,19 @@ def _emit(det, track, send: str, state: dict, correction: bool) -> bool:
     try:
         state["typer"].type_word(send)
     except OSError as exc:
-        print(f"Gagal mengirim tombol: {exc}")
-        print("Kalau Dota jalan sebagai administrator, jalankan bot ini sebagai administrator juga.")
+        print(f"Failed to send keys: {exc}")
+        print("If Dota is running as an administrator, run this bot as an administrator too.")
         state["armed"] = False
         return False
     track.sent = send
     state["tracker"].mark_typed(track, correction=correction)
-    kind = "kamus" if det.lexicon else "ocr"
-    retry = " ulang" if track.retries else ""
-    print(f"ketik {send:<24} y={int(det.cy):4d}  {det.conf:.2f}  {kind}{retry}")
+    kind = "lexicon" if det.lexicon else "ocr"
+    retry = " retry" if track.retries else ""
+    print(f"typed {send:<24} y={int(det.cy):4d}  {det.conf:.2f}  {kind}{retry}")
     if det.conf >= 0.99 and normalize(det.raw) == det.text and send == det.text:
         added = state["lexicon"].remember(det.text, det.conf)
         if added:
-            print(f"kamus + {added}")
+            print(f"lexicon + {added}")
     return True
 
 
@@ -303,7 +310,7 @@ def _type_dets(dets, state: dict, shown: list[str] | None = None) -> None:
         if mouse_in_failsafe_corner():
             state["armed"] = False
             _report(state)
-            print("Stop darurat. Mouse ada di pojok kiri-atas.")
+            print("Emergency stop. The cursor is in the top-left corner.")
             return
         track = state["tracker"].observe(det)
         if track is None or id(track) in emitted:
@@ -355,34 +362,34 @@ def _test_image(path: Path, cfg: dict) -> int:
 
     image = cv2.imread(str(path))
     if image is None:
-        print(f"Tidak bisa membuka {path}")
+        print(f"Could not open {path}")
         return 1
     height, width = image.shape[:2]
     x1, y1, x2, y2 = DEFAULT_REGION_FRACTION
     left, top = int(x1 * width), int(y1 * height)
     crop = image[top : int(y2 * height), left : int(x2 * width)].copy()
-    print(f"Gambar {width}x{height}, crop papan {crop.shape[1]}x{crop.shape[0]} pada ({left}, {top})")
-    print("Memuat model OCR...")
+    print(f"Image {width}x{height}, board crop {crop.shape[1]}x{crop.shape[0]} at ({left}, {top})")
+    print("Loading the OCR model...")
     reader = Reader()
     lexicon = Lexicon.load()
     started = time.perf_counter()
     blobs = reader.blobs(crop, float(cfg["hud_top_ratio"]))
-    print(f"Blob teks: {len(blobs)}")
+    print(f"Text blobs: {len(blobs)}")
     pieces = reader.read_blobs(crop, blobs)
     print(f"OCR {time.perf_counter() - started:.2f}s")
     if not pieces:
-        print("Tidak ada teks terbaca.")
+        print("No text was read.")
     for piece in pieces:
         print(f"  ocr {piece.raw!r:<20} {piece.conf:.2f}  x={piece.x} y={piece.y} {piece.w}x{piece.h}")
     dets = to_detections(group_phrases(pieces), lexicon, float(cfg["min_confidence"]), float(cfg["raw_confidence"]))
     danger, safe = split_by_danger(dets, crop.shape[0], float(cfg["danger_y_ratio"]))
-    print("Urutan ketik:")
+    print("Type order:")
     for det in danger + safe:
-        kind = "kamus" if det.lexicon else "ocr"
-        zone = "bahaya" if det in danger else "aman"
-        print(f"  {det.text:<24} {kind:<6} {zone:<6} y={int(det.cy)} conf={det.conf:.2f} raw={det.raw!r}")
+        kind = "lexicon" if det.lexicon else "ocr"
+        zone = "danger" if det in danger else "safe"
+        print(f"  {det.text:<24} {kind:<7} {zone:<6} y={int(det.cy)} conf={det.conf:.2f} raw={det.raw!r}")
     _dump(crop, reader.mask(crop), danger + safe, "test-image")
-    print(f"Gambar debug ada di {ROOT / 'debug'}")
+    print(f"Debug images are in {ROOT / 'debug'}")
     return 0
 
 
@@ -399,7 +406,7 @@ def _report(state: dict) -> None:
     if not typer.words:
         return
     elapsed = 0.0 if state["started"] is None else max(0.0, time.perf_counter() - state["started"])
-    print(f"Sesi: {typer.words} kata, {typer.chars} huruf, {elapsed:.1f} detik.")
+    print(f"Session: {typer.words} words, {typer.chars} characters, {elapsed:.1f} seconds.")
 
 
 class _KeyEdge:

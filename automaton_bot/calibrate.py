@@ -24,11 +24,11 @@ def choose_region(frame: np.ndarray, origin: tuple[int, int]) -> dict | None:
             state["x1"] = ox
             state["y1"] = oy
 
-    window = "Kalibrasi Automaton Attack"
+    window = "Calibrate Automaton Attack"
     cv2.namedWindow(window, cv2.WINDOW_AUTOSIZE)
     cv2.setMouseCallback(window, on_mouse)
-    print("Tarik kotak di sekeliling papan mini-game.")
-    print("Enter = simpan, C = hapus kotak, Esc = batal.")
+    print("Drag a box around the mini-game board.")
+    print("Enter = save, C = clear the box, Esc = cancel.")
 
     while True:
         vis = frame.copy()
@@ -43,7 +43,7 @@ def choose_region(frame: np.ndarray, origin: tuple[int, int]) -> dict | None:
             x0, x1 = sorted((state["x0"], state["x1"]))
             y0, y1 = sorted((state["y0"], state["y1"]))
             if x1 - x0 < 40 or y1 - y0 < 40:
-                print("Kotak terlalu kecil.")
+                print("The box is too small.")
                 continue
             cv2.destroyWindow(window)
             return {

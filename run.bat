@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title Automaton Attack Bot
+title Dota Automaton Attack Bot
 set PYTHONUNBUFFERED=1
 
 rem Double-click starts cmd /c, which closes the window as soon as this file exits.
@@ -10,12 +10,12 @@ echo %cmdcmdline% | find /i " /c " >nul
 if not errorlevel 1 (
   if not defined BOT_KEEP (
     set BOT_KEEP=1
-    start "Automaton Attack Bot" cmd /k "%~f0" %*
+    start "Dota Automaton Attack Bot" cmd /k "%~f0" %*
     exit /b 0
   )
 )
 
-echo Automaton Attack Bot
+echo Dota Automaton Attack Bot
 echo Folder: %cd%
 echo.
 
@@ -39,7 +39,7 @@ if not defined PY (
 if not defined PY goto :no_python
 
 if not exist ".venv\Scripts\python.exe" (
-  echo Membuat virtual environment...
+  echo Creating the virtual environment...
   call %PY% -m venv .venv
   if errorlevel 1 goto :venv_fail
 )
@@ -47,8 +47,8 @@ if not exist ".venv\Scripts\python.exe" goto :venv_fail
 
 ".venv\Scripts\python.exe" -c "import cv2, mss, rapidocr, rapidfuzz" >nul 2>&1
 if errorlevel 1 (
-  echo Menginstal dependency. Pertama kali butuh beberapa menit.
-  echo Jangan ditutup.
+  echo Installing dependencies. The first run takes a few minutes.
+  echo Do not close this window.
   echo.
   ".venv\Scripts\python.exe" -m pip install --upgrade pip
   if errorlevel 1 goto :pip_fail
@@ -56,47 +56,47 @@ if errorlevel 1 (
   if errorlevel 1 goto :pip_fail
 )
 
-echo Menjalankan bot...
+echo Running the Dota Automaton Attack bot...
 echo.
 ".venv\Scripts\python.exe" -m automaton_bot %*
 if errorlevel 1 goto :bot_fail
 echo.
-echo Bot selesai.
+echo Bot finished.
 pause
 exit /b 0
 
 :no_python
-echo Python 3.11 atau yang lebih baru tidak ditemukan di PC ini.
+echo Python 3.11 or newer was not found on this PC.
 echo.
-echo 1. Buka https://www.python.org/downloads/release/python-31210/
-echo 2. Jalankan Windows installer 64-bit
-echo 3. Centang "Add python.exe to PATH" dan "py launcher"
-echo 4. Tutup jendela ini, lalu jalankan run.bat lagi
+echo 1. Open https://www.python.org/downloads/release/python-31210/
+echo 2. Run the 64-bit Windows installer
+echo 3. Check "Add python.exe to PATH" and "py launcher"
+echo 4. Close this window, then run run.bat again
 echo.
 pause
 exit /b 1
 
 :venv_fail
 echo.
-echo Gagal membuat folder .venv.
-echo Python ketemu, tetapi virtual environment tidak terbuat.
+echo Failed to create the .venv folder.
+echo Python was found, but the virtual environment was not created.
 echo.
 pause
 exit /b 1
 
 :pip_fail
 echo.
-echo Instal dependency gagal.
-echo Cek koneksi internet, lalu jalankan run.bat lagi.
-echo Kalau pesannya menyebut DLL atau onnxruntime, install
-echo Microsoft Visual C++ Redistributable x64, lalu ulangi.
+echo Dependency installation failed.
+echo Check your internet connection, then run run.bat again.
+echo If the message mentions a DLL or onnxruntime, install the
+echo Microsoft Visual C++ Redistributable x64, then try again.
 echo.
 pause
 exit /b 1
 
 :bot_fail
 echo.
-echo Bot berhenti. Pesan error ada di atas.
+echo The bot stopped. The error is above.
 echo.
 pause
 exit /b 1
