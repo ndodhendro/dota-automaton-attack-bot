@@ -215,10 +215,23 @@ def _read_word_file(path: Path) -> set[str]:
     return words
 
 
+def _is_hud(norm: str) -> bool:
+    if norm in BLOCKLIST:
+        return True
+    if len(norm) < 4:
+        return False
+    for word in BLOCKLIST:
+        if abs(len(word) - len(norm)) > 1:
+            continue
+        if Levenshtein.distance(norm, word) <= 1:
+            return True
+    return False
+
+
 def decide(raw: str, conf: float, lexicon: Lexicon, raw_confidence: float) -> tuple[str, bool] | None:
     cleaned = _collapse_stacked_copy(_strip_trailing_score(raw))
     norm = normalize(cleaned)
-    if not norm or norm in BLOCKLIST or _is_numeric_token(norm):
+    if not norm or _is_hud(norm) or _is_numeric_token(norm):
         return None
     if len(norm) > 80:
         return None
@@ -242,7 +255,7 @@ def decide(raw: str, conf: float, lexicon: Lexicon, raw_confidence: float) -> tu
         and len(norm) >= 4
         and re.fullmatch(r"[a-z]+", norm)
         and _has_vowel(norm)
-        and norm not in BLOCKLIST
+        and not _is_hud(norm)
     ):
         return norm, False
     return None

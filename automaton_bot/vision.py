@@ -1,4 +1,4 @@
-"""Find white and gold labels, then read them."""
+"""Find the small green flying text, then read it."""
 
 from __future__ import annotations
 
@@ -44,46 +44,12 @@ class Reader:
             pass
 
     def blobs(self, frame: np.ndarray, hud_top_ratio: float) -> list[Blob]:
-        mask = _text_mask(frame)
-        height, width = mask.shape
+        height, width = frame.shape[:2]
         scale = max(width / 980.0, 0.65)
-        kx = max(5, int(round(11 * scale)))
-        ky = max(2, int(round(3 * scale)))
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kx, ky))
-        joined = cv2.dilate(mask, kernel)
-        count, _, stats, _ = cv2.connectedComponentsWithStats(joined, 8)
-        # Labels in this mini-game are one short line. Highlights on the
-        # automaton and the score header fall outside this band.
-        min_h = max(22, int(26 * scale))
-        max_h = int(52 * scale)
-        found: list[Blob] = []
         hud_cut = height * hud_top_ratio
-        for index in range(1, count):
-            x, y, w, h = (int(v) for v in stats[index][:4])
-            if h < min_h or h > max_h or w < int(22 * scale) or w > int(width * 0.8):
-                continue
-            if (y + h / 2) < hud_cut:
-                continue
-            aspect = w / float(h)
-            # Short names are a bit wider than they are tall. Solid bars and
-            # square highlights on the automaton are not.
-            if aspect < 1.15 or aspect > 14:
-                continue
-            roi = mask[y : y + h, x : x + w]
-            if roi.size == 0:
-                continue
-            fill = float(roi.mean()) / 255.0
-            if fill < 0.11 or fill > 0.62:
-                continue
-            if _ink_runs(roi) < 2:
-                continue
-            found.extend(_split_wide(mask, x, y, w, h))
-        sentences = _sentence_blobs(frame, scale, hud_cut)
-        found = [blob for blob in found if not _under_sentence(blob, sentences)]
+        found = _green_blobs(frame, scale, hud_cut, width)
         found.sort(key=lambda blob: blob.cy, reverse=True)
-        # Keep every full-sentence line. Those sit above the big letters and
-        # are the only place the whole 2-3 line phrase is written out.
-        return sentences + found[:10]
+        return found[:8]
 
     def read_blobs(self, frame: np.ndarray, blobs: list[Blob]) -> list[Piece]:
         pieces: list[Piece] = []
@@ -101,11 +67,7 @@ class Reader:
         crop = frame[y0:y1, x0:x1]
         if crop.size == 0:
             return []
-        if blob.upscale >= 4:
-            hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange(hsv, (35, 40, 125), (100, 255, 255))
-        else:
-            mask = _text_mask(crop)
+        mask = _green_mask(crop)
         canvas = np.full_like(crop, 255)
         canvas[mask > 0] = (0, 0, 0)
         scale = blob.upscale
@@ -125,35 +87,29 @@ class Reader:
         return pieces
 
     def mask(self, frame: np.ndarray) -> np.ndarray:
-        return _text_mask(frame)
+        return _green_mask(frame)
 
 
-def _ink_runs(roi: np.ndarray) -> int:
-    columns = (roi > 0).any(axis=0)
-    runs = 0
-    inside = False
-    for value in columns:
-        if value and not inside:
-            runs += 1
-            inside = True
-        elif not value:
-            inside = False
-    return runs
+def _green_mask(bgr: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    return cv2.inRange(hsv, (35, 40, 125), (100, 255, 255))
 
 
-def _sentence_blobs(frame: np.ndarray, scale: float, hud_cut: float) -> list[Blob]:
-    """The small green line that spells the whole falling phrase."""
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    green = cv2.inRange(hsv, (35, 40, 125), (100, 255, 255))
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(11, int(15 * scale)), 2))
+def _green_blobs(frame: np.ndarray, scale: float, hud_cut: float, width: int) -> list[Blob]:
+    """Small green lines only. White and gold highlights are a fragment of the same label."""
+    green = _green_mask(frame)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(9, int(13 * scale)), 2))
     joined = cv2.dilate(green, kernel)
     count, _, stats, _ = cv2.connectedComponentsWithStats(joined, 8)
     min_h = max(7, int(8 * scale))
-    max_h = max(min_h + 4, int(24 * scale))
+    max_h = max(min_h + 6, int(28 * scale))
+    min_w = max(28, int(34 * scale))
+    # SCORE / TIME / HIGH SCORE sit just under the big numbers, still above the labels.
+    header = max(hud_cut, frame.shape[0] * 0.115)
     found: list[Blob] = []
     for index in range(1, count):
         x, y, w, h = (int(v) for v in stats[index][:4])
-        if h < min_h or w < int(90 * scale) or (y + h / 2) < hud_cut:
+        if h < min_h or w < min_w or w > int(width * 0.8) or (y + h / 2) < header:
             continue
         strips = [(0, h)]
         if h > max_h:
@@ -164,9 +120,12 @@ def _sentence_blobs(frame: np.ndarray, scale: float, hud_cut: float) -> list[Blo
             if sh < min_h or sh > max_h:
                 continue
             line = green[sy : sy + sh, x : x + w]
-            if line.size == 0 or line.shape[1] / float(sh) < 8 or _ink_runs(line) < 6:
+            if line.size == 0 or line.shape[1] / float(sh) < 3.0:
                 continue
-            found.extend(_split_wide(green, x, sy, w, sh, upscale=4, min_piece=int(90 * scale)))
+            # A short name can be one connected green run. A speck still is not a line.
+            if float((line > 0).mean()) < 0.12:
+                continue
+            found.extend(_split_wide(green, x, sy, w, sh, upscale=4, min_piece=min_w))
     return found
 
 
@@ -181,17 +140,6 @@ def _split_wide(mask: np.ndarray, x: int, y: int, w: int, h: int, upscale: int =
     if len(bands) < 2:
         return [Blob(x, y, w, h, upscale=upscale)]
     return [Blob(x + left, y, right - left, h, upscale=upscale) for left, right in bands]
-
-
-def _under_sentence(blob: Blob, sentences: list[Blob]) -> bool:
-    for sentence in sentences:
-        center = blob.x + blob.w / 2
-        if not (sentence.x - 30 <= center <= sentence.x + sentence.w + 30):
-            continue
-        # Only the big decorative letters sitting directly under this sentence.
-        if sentence.y + sentence.h - 4 <= blob.y <= sentence.y + sentence.h + 90:
-            return True
-    return False
 
 
 def _bands(ink, min_gap: int, min_span: int) -> list[tuple[int, int]]:
@@ -212,16 +160,6 @@ def _bands(ink, min_gap: int, min_span: int) -> list[tuple[int, int]]:
         else:
             merged.append([begin, end])
     return [(begin, end) for begin, end in merged if end - begin >= min_span]
-
-
-def _text_mask(bgr: np.ndarray) -> np.ndarray:
-    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-    # Labels are white or gold. The score HUD is green, so it stays out.
-    white = cv2.inRange(hsv, (0, 0, 185), (180, 80, 255))
-    gold = cv2.inRange(hsv, (12, 70, 150), (38, 255, 255))
-    mask = cv2.bitwise_or(white, gold)
-    kernel = np.ones((2, 2), np.uint8)
-    return cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
 
 def _rows(result) -> list[tuple]:

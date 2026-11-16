@@ -42,6 +42,7 @@ def run() -> None:
     text, used = decide("KAYA 10", 0.9, lexicon, 0.8)
     _check(text == "kaya" and used, "trailing score")
     _check(decide("SCORE", 0.99, lexicon, 0.8) is None, "hud")
+    _check(decide("TIMAE", 0.9, lexicon, 0.8) is None, "misread time stays out")
     _check(decide("x2.0", 0.99, lexicon, 0.8) is None, "multiplier")
     _check(decide("0:30", 0.99, lexicon, 0.8) is None, "timer")
     _check(decide("antlmage", 0.7, lexicon, 0.8)[0] == "antimage", "one edit")
