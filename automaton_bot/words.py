@@ -228,10 +228,36 @@ def _is_hud(norm: str) -> bool:
     return False
 
 
+def _short_name(norm: str, lexicon: Lexicon) -> str | None:
+    """Keep Io, Kez, and Riki when OCR turns i/l/1 or o/0 into each other."""
+    if not (2 <= len(norm) <= 4):
+        return None
+    folds = (
+        norm,
+        norm.translate(_OCR_TRANSLATION),
+        norm.translate(str.maketrans({"0": "o", "1": "i", "5": "s", "8": "b", "|": "i", "2": "z"})),
+        norm.translate(str.maketrans({"0": "o", "1": "i", "l": "i", "5": "s", "2": "z", "|": "i"})),
+    )
+    hits = {item for item in folds if item in lexicon.words}
+    if len(hits) == 1:
+        return next(iter(hits))
+    return None
+
+
 def decide(raw: str, conf: float, lexicon: Lexicon, raw_confidence: float) -> tuple[str, bool] | None:
+    # Check the raw token first so a trailing digit inside Ke2 or Io's "10"
+    # is not thrown away as a point value.
+    raw_norm = normalize(raw)
+    short = _short_name(raw_norm, lexicon)
     cleaned = _collapse_stacked_copy(_strip_trailing_score(raw))
     norm = normalize(cleaned)
-    if not norm or _is_hud(norm) or _is_numeric_token(norm):
+    if short is None and norm:
+        short = _short_name(norm, lexicon)
+    if short is not None:
+        if len(short) <= 2 and conf < 0.45:
+            return None
+        return short, True
+    if _is_hud(norm) or _is_numeric_token(norm):
         return None
     if len(norm) > 80:
         return None
@@ -266,7 +292,10 @@ def group_phrases(pieces: list[Piece]) -> list[Piece]:
     usable = []
     for piece in pieces:
         token = normalize(_strip_trailing_score(piece.raw))
-        if not token or _is_numeric_token(token):
+        bare = normalize(piece.raw)
+        if not token and not (2 <= len(bare) <= 4):
+            continue
+        if token and _is_numeric_token(token):
             continue
         usable.append(piece)
     if not usable:

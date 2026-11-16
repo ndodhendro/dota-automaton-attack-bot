@@ -103,7 +103,8 @@ def _green_blobs(frame: np.ndarray, scale: float, hud_cut: float, width: int) ->
     count, _, stats, _ = cv2.connectedComponentsWithStats(joined, 8)
     min_h = max(7, int(8 * scale))
     max_h = max(min_h + 6, int(28 * scale))
-    min_w = max(28, int(34 * scale))
+    # Io is about two narrow letters. Kaya's four wide letters are several times broader.
+    min_w = max(12, int(14 * scale))
     # SCORE / TIME / HIGH SCORE sit just under the big numbers, still above the labels.
     header = max(hud_cut, frame.shape[0] * 0.115)
     found: list[Blob] = []
@@ -120,12 +121,13 @@ def _green_blobs(frame: np.ndarray, scale: float, hud_cut: float, width: int) ->
             if sh < min_h or sh > max_h:
                 continue
             line = green[sy : sy + sh, x : x + w]
-            if line.size == 0 or line.shape[1] / float(sh) < 3.0:
+            if line.size == 0 or line.shape[1] / float(sh) < 1.55:
                 continue
             # A short name can be one connected green run. A speck still is not a line.
             if float((line > 0).mean()) < 0.12:
                 continue
-            found.extend(_split_wide(green, x, sy, w, sh, upscale=4, min_piece=min_w))
+            upscale = 8 if w < int(56 * scale) else 4
+            found.extend(_split_wide(green, x, sy, w, sh, upscale=upscale, min_piece=min_w))
     return found
 
 

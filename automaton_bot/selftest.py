@@ -32,6 +32,8 @@ def run() -> None:
         "ringofprotection",
         "blackkingbar",
         "io",
+        "kez",
+        "riki",
         "naturesprophet",
     })
 
@@ -43,6 +45,11 @@ def run() -> None:
     _check(text == "kaya" and used, "trailing score")
     _check(decide("SCORE", 0.99, lexicon, 0.8) is None, "hud")
     _check(decide("TIMAE", 0.9, lexicon, 0.8) is None, "misread time stays out")
+    _check(decide("IO", 0.55, lexicon, 0.8) == ("io", True), "short io")
+    _check(decide("10", 0.8, lexicon, 0.8) == ("io", True), "io read as digits")
+    _check(decide("KE2", 0.7, lexicon, 0.8) == ("kez", True), "kez with a digit")
+    _check(decide("R1K1", 0.7, lexicon, 0.8) == ("riki", True), "riki with thin i")
+    _check(decide("IO", 0.3, lexicon, 0.8) is None, "very weak io is dropped")
     _check(decide("x2.0", 0.99, lexicon, 0.8) is None, "multiplier")
     _check(decide("0:30", 0.99, lexicon, 0.8) is None, "timer")
     _check(decide("antlmage", 0.7, lexicon, 0.8)[0] == "antimage", "one edit")
