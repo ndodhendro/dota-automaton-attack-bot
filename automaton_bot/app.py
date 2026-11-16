@@ -17,7 +17,15 @@ from automaton_bot.config import CONFIG_PATH, ROOT, active_region, load_config, 
 from automaton_bot.tracker import Tracker
 from automaton_bot.typer import Typer, foreground_is_us, mouse_in_failsafe_corner
 from automaton_bot.vision import highlights, read_highlight
-from automaton_bot.words import Lexicon, group_phrases, normalize, remainder_of, split_by_danger, to_detections
+from automaton_bot.words import (
+    Lexicon,
+    group_phrases,
+    normalize,
+    remainder_of,
+    split_by_danger,
+    stuck_tail,
+    to_detections,
+)
 
 VK = {
     "F7": 0x76,
@@ -178,11 +186,12 @@ def _process_frame(frame, reader, lexicon: Lexicon, cfg: dict, state: dict) -> b
     low_dets = _recognize(reader, frame, low, lexicon, cfg)
     low_dets.sort(key=lambda det: -det.cy)
     shown = _highlights(reader, frame, cfg) if state["armed"] or state["preview"] else []
-    if state["armed"]:
-        _type_dets(low_dets, state, shown)
     high_dets = _recognize(reader, frame, high, lexicon, cfg) if state["armed"] or state["preview"] else []
     high_dets.sort(key=lambda det: (len(det.text), -det.cy))
+    if state["armed"] and _type_corrections(low_dets + high_dets, state, shown):
+        return bool(blobs) or bool(high_dets)
     if state["armed"]:
+        _type_dets(low_dets, state, shown)
         _type_dets(high_dets, state, shown)
     if state["preview"] and not state["armed"]:
         _show_preview(frame, reader.mask(frame), low_dets + high_dets, state)
@@ -229,6 +238,63 @@ def _tail(det, shown: list[str]) -> str:
     return ""
 
 
+def _correction(track, det, shown: list[str]) -> str:
+    if track.pending:
+        return track.pending
+    highlighted = _tail(det, shown)
+    if highlighted:
+        return highlighted
+    if track.sent:
+        return stuck_tail(track.sent, det.text) or ""
+    return ""
+
+
+def _type_corrections(dets, state: dict, shown: list[str]) -> bool:
+    """Finish a word the game is still holding before typing anything else."""
+    emitted: set[int] = set()
+    for det in dets:
+        track = state["tracker"].observe(det)
+        if track is None or id(track) in emitted:
+            continue
+        send = _correction(track, det, shown)
+        if not send:
+            continue
+        if not _emit(det, track, send, state, correction=True):
+            return True
+        return True
+    return False
+
+
+def _emit(det, track, send: str, state: dict, correction: bool) -> bool:
+    """Type one string. Return False when typing had to stop."""
+    if foreground_is_us():
+        if not state["focus_warned"]:
+            print("Fokuskan jendela Dota. Ketikan ditunda selama console ini yang di depan.")
+            state["focus_warned"] = True
+        return False
+    state["focus_warned"] = False
+    if correction:
+        track.retries = state["tracker"].max_retries
+    track.pending = ""
+    try:
+        state["typer"].type_word(send)
+    except OSError as exc:
+        print(f"Gagal mengirim tombol: {exc}")
+        print("Kalau Dota jalan sebagai administrator, jalankan bot ini sebagai administrator juga.")
+        state["armed"] = False
+        return False
+    track.sent = send
+    state["tracker"].mark_typed(track, correction=correction)
+    kind = "kamus" if det.lexicon else "ocr"
+    retry = " ulang" if track.retries else ""
+    print(f"ketik {send:<24} y={int(det.cy):4d}  {det.conf:.2f}  {kind}{retry}")
+    if det.conf >= 0.99 and normalize(det.raw) == det.text and send == det.text:
+        added = state["lexicon"].remember(det.text, det.conf)
+        if added:
+            print(f"kamus + {added}")
+    return True
+
+
 def _type_dets(dets, state: dict, shown: list[str] | None = None) -> None:
     emitted: set[int] = set()
     for det in dets:
@@ -242,36 +308,12 @@ def _type_dets(dets, state: dict, shown: list[str] | None = None) -> None:
         track = state["tracker"].observe(det)
         if track is None or id(track) in emitted:
             continue
-        send = track.pending or _tail(det, shown or [])
-        if not send:
-            if track.typed and track.text != det.text:
-                continue
-            send = det.text
-        if foreground_is_us():
-            if not state["focus_warned"]:
-                print("Fokuskan jendela Dota. Ketikan ditunda selama console ini yang di depan.")
-                state["focus_warned"] = True
+        send = det.text
+        if track.typed and track.text != det.text:
+            continue
+        if not _emit(det, track, send, state, correction=False):
             return
-        state["focus_warned"] = False
-        if send != det.text:
-            track.retries = state["tracker"].max_retries
-        track.pending = ""
-        try:
-            state["typer"].type_word(send)
-        except OSError as exc:
-            print(f"Gagal mengirim tombol: {exc}")
-            print("Kalau Dota jalan sebagai administrator, jalankan bot ini sebagai administrator juga.")
-            state["armed"] = False
-            return
-        state["tracker"].mark_typed(track)
         emitted.add(id(track))
-        if det.conf >= 0.99 and normalize(det.raw) == det.text and send == det.text:
-            added = state["lexicon"].remember(det.text, det.conf)
-            if added:
-                print(f"kamus + {added}")
-        kind = "kamus" if det.lexicon else "ocr"
-        retry = " ulang" if track.retries else ""
-        print(f"ketik {send:<24} y={int(det.cy):4d}  {det.conf:.2f}  {kind}{retry}")
 
 
 def _show_preview(frame, mask, dets, state: dict) -> None:

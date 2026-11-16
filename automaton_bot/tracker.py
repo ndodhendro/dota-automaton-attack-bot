@@ -6,7 +6,16 @@ import math
 import time
 from dataclasses import dataclass
 
-from automaton_bot.words import Det
+from rapidfuzz.distance import Levenshtein
+
+from automaton_bot.words import Det, stuck_tail
+
+
+def _near(a: str, b: str) -> bool:
+    """A one or two letter typo of the same word, not a different label."""
+    if abs(len(a) - len(b)) > 2 or min(len(a), len(b)) < 5:
+        return False
+    return Levenshtein.distance(a, b) <= 2
 
 
 def _contains(longer: str, shorter: str) -> bool:
@@ -39,6 +48,8 @@ class Track:
     typed_at: float = 0.0
     last_seen: float = 0.0
     pending: str = ""
+    sent: str = ""
+    fixups: int = 0
 
 
 class Tracker:
@@ -84,6 +95,15 @@ class Tracker:
                     return occupied
                 occupied.last_seen = now
                 return None
+            if occupied is not None and occupied.typed and _near(occupied.sent or occupied.text, det.text):
+                tail = stuck_tail(occupied.sent or occupied.text, det.text)
+                occupied.last_seen = now
+                if tail and occupied.fixups < 5 and (occupied.fixups == 0 or now - occupied.typed_at >= 0.12):
+                    occupied.pending = tail
+                    occupied.text = det.text
+                    occupied.conf = max(occupied.conf, det.conf)
+                    return occupied
+                return None
             track = Track(
                 text=det.text,
                 cx=det.cx,
@@ -99,6 +119,8 @@ class Tracker:
         self._touch(track, det, now)
         if not track.typed:
             return track
+        if 0 < track.fixups < 5 and now - track.typed_at >= 0.12:
+            return track
         if track.retries < self.max_retries and now - track.typed_at >= self.retry_delay:
             return track
         return None
@@ -112,10 +134,12 @@ class Tracker:
         track.hits += 1
         track.last_seen = now
 
-    def mark_typed(self, track: Track, now: float | None = None) -> None:
+    def mark_typed(self, track: Track, now: float | None = None, correction: bool = False) -> None:
         now = time.perf_counter() if now is None else now
-        if track.typed:
+        if track.typed and not correction:
             track.retries += 1
+        if correction:
+            track.fixups += 1
         track.typed = True
         track.typed_at = now
         track.last_seen = now

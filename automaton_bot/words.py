@@ -244,6 +244,24 @@ def _short_name(norm: str, lexicon: Lexicon) -> str | None:
     return None
 
 
+def stuck_tail(sent: str, correct: str) -> str | None:
+    """What the game still needs when a typo stopped inside a known word.
+
+    tideunter against tidehunter continues at hunter. The letters that already
+    matched are not sent again.
+    """
+    if not sent or sent == correct:
+        return None
+    shared = 0
+    for left, right in zip(sent, correct):
+        if left != right:
+            break
+        shared += 1
+    if shared < 4 or shared >= len(correct):
+        return None
+    return correct[shared:]
+
+
 def remainder_of(raw: str, full: str, highlight: str) -> str | None:
     """Letters the game still wants after a known phrase was partly accepted.
 

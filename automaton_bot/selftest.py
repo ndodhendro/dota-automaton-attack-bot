@@ -13,6 +13,7 @@ from automaton_bot.words import (
     decide,
     group_phrases,
     remainder_of,
+    stuck_tail,
     normalize,
     split_by_danger,
     to_detections,
@@ -56,6 +57,11 @@ def run() -> None:
     _check(remainder_of(phrase, full, "FROM") is None, "a whole highlighted word stays with the sentence")
     _check(remainder_of(phrase, full, "COLLECTION") is None, "the whole last word is not a tail")
     _check(remainder_of(phrase, full, "LLECTION") == "llection", "mid-word highlight is the missing tail")
+    hunter = Lexicon({"tidehunter"})
+    _check(decide("tideunter", 0.9, hunter, 0.8) == ("tidehunter", True), "missing h is corrected")
+    _check(stuck_tail("tideunter", "tidehunter") == "hunter", "typo continues at the missing letter")
+    _check(stuck_tail("tidehunter", "tidehunter") is None, "exact send needs no tail")
+    _check(remainder_of("TIDEHUNTER", "tidehunter", "HUNTER") == "hunter", "highlight shows the untyped tail")
     _check(decide("x2.0", 0.99, lexicon, 0.8) is None, "multiplier")
     _check(decide("0:30", 0.99, lexicon, 0.8) is None, "timer")
     _check(decide("antlmage", 0.7, lexicon, 0.8)[0] == "antimage", "one edit")
@@ -163,5 +169,13 @@ def run() -> None:
         now=4.1,
     )
     _check(rest is started and rest.pending == "llection", "the stored phrase finishes the typed prefix")
+
+    fresh_tracker = Tracker(radius=170, retry_delay=0.2, max_retries=1)
+    typo = Det("tideunter", 0.9, 30, 300, 80, 16, False, "tideunter")
+    typed_typo = fresh_tracker.observe(typo, now=5.0)
+    fresh_tracker.mark_typed(typed_typo, now=5.0)
+    typed_typo.sent = "tideunter"
+    repaired = fresh_tracker.observe(Det("tidehunter", 0.95, 32, 304, 90, 16, True, "tidehunter"), now=5.05)
+    _check(repaired is typed_typo and repaired.pending == "hunter", "a stuck typo is finished, not retyped")
 
     print("self-test ok")
