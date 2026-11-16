@@ -9,11 +9,19 @@ from dataclasses import dataclass
 from automaton_bot.words import Det
 
 
+def _contains(longer: str, shorter: str) -> bool:
+    return len(shorter) >= 4 and shorter in longer
+
+
 @dataclass
 class Track:
     text: str
     cx: float
     cy: float
+    w: float = 40
+    h: float = 20
+    conf: float = 1.0
+    hits: int = 1
     typed: bool = False
     retries: int = 0
     typed_at: float = 0.0
@@ -41,15 +49,37 @@ class Tracker:
         self.gc(now)
         track = self._match(det)
         if track is None:
-            track = Track(text=det.text, cx=det.cx, cy=det.cy, last_seen=now)
+            occupied = self._match_place(det)
+            if occupied is not None:
+                # Two labels are on top of each other. Keep the clean phrase
+                # and do not type the mixed OCR result.
+                if len(det.text) > len(occupied.text) and det.conf >= occupied.conf and _contains(det.text, occupied.text):
+                    occupied.text = det.text
+                    occupied.conf = det.conf
+                occupied.last_seen = now
+                return None
+            track = Track(
+                text=det.text,
+                cx=det.cx,
+                cy=det.cy,
+                w=det.w,
+                h=det.h,
+                conf=det.conf,
+                hits=1,
+                last_seen=now,
+            )
             self.tracks.append(track)
-            return track
+            return None
         track.cx = det.cx
         track.cy = det.cy
+        track.w = det.w
+        track.h = det.h
+        track.conf = max(track.conf, det.conf)
+        track.hits += 1
         track.last_seen = now
-        if not track.typed:
+        if not track.typed and track.hits >= 2:
             return track
-        if track.retries < self.max_retries and now - track.typed_at >= self.retry_delay:
+        if track.typed and track.retries < self.max_retries and now - track.typed_at >= self.retry_delay:
             return track
         return None
 
@@ -60,6 +90,24 @@ class Tracker:
         track.typed = True
         track.typed_at = now
         track.last_seen = now
+
+    def _match_place(self, det: Det) -> Track | None:
+        best: Track | None = None
+        best_dist = 1e9
+        for track in self.tracks:
+            if track.text == det.text:
+                continue
+            dx = abs(track.cx - det.cx)
+            dy = abs(track.cy - det.cy)
+            if dx > max(track.w, det.w, 40) * 0.55:
+                continue
+            if dy > max(70.0, track.h, det.h) + 36:
+                continue
+            dist = dx + dy
+            if dist < best_dist:
+                best = track
+                best_dist = dist
+        return best
 
     def _match(self, det: Det) -> Track | None:
         best: Track | None = None

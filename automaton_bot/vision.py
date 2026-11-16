@@ -77,8 +77,9 @@ class Reader:
                 continue
             if _ink_runs(roi) < 2:
                 continue
-            found.append(Blob(x, y, w, h))
+            found.extend(_split_wide(mask, x, y, w, h))
         sentences = _sentence_blobs(frame, scale, hud_cut)
+        found = [blob for blob in found if not _under_sentence(blob, sentences)]
         found.sort(key=lambda blob: blob.cy, reverse=True)
         # Keep every full-sentence line. Those sit above the big letters and
         # are the only place the whole 2-3 line phrase is written out.
@@ -152,17 +153,64 @@ def _sentence_blobs(frame: np.ndarray, scale: float, hud_cut: float) -> list[Blo
     found: list[Blob] = []
     for index in range(1, count):
         x, y, w, h = (int(v) for v in stats[index][:4])
-        if h < min_h or h > max_h or w < int(120 * scale):
+        if h < min_h or w < int(90 * scale) or (y + h / 2) < hud_cut:
             continue
-        if w / float(h) < 8:
-            continue
-        if (y + h / 2) < hud_cut:
-            continue
-        roi = green[y : y + h, x : x + w]
-        if roi.size == 0 or _ink_runs(roi) < 6:
-            continue
-        found.append(Blob(x, y, w, h, upscale=4))
+        strips = [(0, h)]
+        if h > max_h:
+            roi = green[y : y + h, x : x + w]
+            strips = _bands((roi > 0).any(axis=1), min_gap=3, min_span=min_h) or []
+        for top, bottom in strips:
+            sy, sh = y + top, bottom - top
+            if sh < min_h or sh > max_h:
+                continue
+            line = green[sy : sy + sh, x : x + w]
+            if line.size == 0 or line.shape[1] / float(sh) < 8 or _ink_runs(line) < 6:
+                continue
+            found.extend(_split_wide(green, x, sy, w, sh, upscale=4, min_piece=int(90 * scale)))
     return found
+
+
+def _split_wide(mask: np.ndarray, x: int, y: int, w: int, h: int, upscale: int = 2, min_piece: int = 36) -> list[Blob]:
+    """Split a blob where two labels only touch across a blank gap."""
+    if w < min_piece * 2:
+        return [Blob(x, y, w, h, upscale=upscale)]
+    roi = mask[y : y + h, x : x + w]
+    if roi.size == 0:
+        return []
+    bands = _bands((roi > 0).any(axis=0), min_gap=16, min_span=min_piece)
+    if len(bands) < 2:
+        return [Blob(x, y, w, h, upscale=upscale)]
+    return [Blob(x + left, y, right - left, h, upscale=upscale) for left, right in bands]
+
+
+def _under_sentence(blob: Blob, sentences: list[Blob]) -> bool:
+    for sentence in sentences:
+        center = blob.x + blob.w / 2
+        if not (sentence.x - 30 <= center <= sentence.x + sentence.w + 30):
+            continue
+        if sentence.y - 10 <= blob.cy <= sentence.y + sentence.h + 170:
+            return True
+    return False
+
+
+def _bands(ink, min_gap: int, min_span: int) -> list[tuple[int, int]]:
+    runs: list[list[int]] = []
+    start: int | None = None
+    for index, on in enumerate(list(ink) + [False]):
+        if on and start is None:
+            start = index
+        elif not on and start is not None:
+            runs.append([start, index])
+            start = None
+    if not runs:
+        return []
+    merged = [runs[0]]
+    for begin, end in runs[1:]:
+        if begin - merged[-1][1] < min_gap:
+            merged[-1][1] = end
+        else:
+            merged.append([begin, end])
+    return [(begin, end) for begin, end in merged if end - begin >= min_span]
 
 
 def _text_mask(bgr: np.ndarray) -> np.ndarray:
