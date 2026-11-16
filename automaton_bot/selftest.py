@@ -12,6 +12,7 @@ from automaton_bot.words import (
     Piece,
     decide,
     group_phrases,
+    remainder_of,
     normalize,
     split_by_danger,
     to_detections,
@@ -50,6 +51,11 @@ def run() -> None:
     _check(decide("KE2", 0.7, lexicon, 0.8) == ("kez", True), "kez with a digit")
     _check(decide("R1K1", 0.7, lexicon, 0.8) == ("riki", True), "riki with thin i")
     _check(decide("IO", 0.3, lexicon, 0.8) is None, "very weak io is dropped")
+    phrase = "A BEAUTIFUL SOUL FOR MY COLLECTION."
+    full = "abeautifulsoulformycollection"
+    _check(remainder_of(phrase, full, "FROM") is None, "a whole highlighted word stays with the sentence")
+    _check(remainder_of(phrase, full, "COLLECTION") is None, "the whole last word is not a tail")
+    _check(remainder_of(phrase, full, "LLECTION") == "llection", "mid-word highlight is the missing tail")
     _check(decide("x2.0", 0.99, lexicon, 0.8) is None, "multiplier")
     _check(decide("0:30", 0.99, lexicon, 0.8) is None, "timer")
     _check(decide("antlmage", 0.7, lexicon, 0.8)[0] == "antimage", "one edit")
@@ -148,5 +154,14 @@ def run() -> None:
     tracker.mark_typed(locked, now=3.0)
     mixed = Det("wehavemoredemonedge", 0.91, 210, 112, 320, 18, False, "mixed")
     _check(tracker.observe(mixed, now=3.1) is None, "overlapping read is ignored")
+
+    partial = Det("abeautifulsoulformyco", 0.9, 120, 400, 180, 12, False, "A BEAUTIFUL SOUL FOR MY CO")
+    started = tracker.observe(partial, now=4.0)
+    tracker.mark_typed(started, now=4.0)
+    rest = tracker.observe(
+        Det("abeautifulsoulformycollection", 0.97, 120, 402, 289, 11, True, "A BEAUTIFUL SOUL FOR MY COLLECTION."),
+        now=4.1,
+    )
+    _check(rest is started and rest.pending == "llection", "the stored phrase finishes the typed prefix")
 
     print("self-test ok")

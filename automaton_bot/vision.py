@@ -90,6 +90,57 @@ class Reader:
         return _green_mask(frame)
 
 
+def highlights(frame: np.ndarray, hud_top_ratio: float) -> list[Blob]:
+    """The bright white or gold fragment the game is waiting on right now."""
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    white = cv2.inRange(hsv, (0, 0, 185), (180, 80, 255))
+    gold = cv2.inRange(hsv, (12, 70, 150), (38, 255, 255))
+    mask = cv2.bitwise_or(white, gold)
+    height, width = mask.shape
+    scale = max(width / 980.0, 0.65)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(7, int(9 * scale)), 3))
+    joined = cv2.dilate(mask, kernel)
+    count, _, stats, _ = cv2.connectedComponentsWithStats(joined, 8)
+    hud_cut = height * max(hud_top_ratio, 0.115)
+    found: list[Blob] = []
+    for index in range(1, count):
+        x, y, w, h = (int(v) for v in stats[index][:4])
+        if h < int(18 * scale) or h > int(55 * scale) or w < int(36 * scale):
+            continue
+        if w / float(h) < 2.0 or (y + h / 2) < hud_cut:
+            continue
+        found.append(Blob(x, y, w, h, upscale=3))
+    found.sort(key=lambda blob: blob.w, reverse=True)
+    return found[:3]
+
+
+def read_highlight(reader: "Reader", frame: np.ndarray, blob: Blob) -> str:
+    height, width = frame.shape[:2]
+    x0 = max(0, blob.x - 6)
+    y0 = max(0, blob.y - 3)
+    x1 = min(width, blob.x + blob.w + 6)
+    y1 = min(height, blob.y + blob.h + 3)
+    crop = frame[y0:y1, x0:x1]
+    if crop.size == 0:
+        return ""
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    white = cv2.inRange(hsv, (0, 0, 185), (180, 80, 255))
+    gold = cv2.inRange(hsv, (12, 70, 150), (38, 255, 255))
+    mask = cv2.bitwise_or(white, gold)
+    canvas = np.full_like(crop, 255)
+    canvas[mask > 0] = (0, 0, 0)
+    canvas = cv2.resize(canvas, None, fx=blob.upscale, fy=blob.upscale, interpolation=cv2.INTER_CUBIC)
+    canvas = cv2.copyMakeBorder(canvas, 8, 8, 8, 8, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+    try:
+        result = reader._ocr(canvas, use_det=False, use_cls=False)
+    except TypeError:
+        result = reader._ocr(canvas)
+    except Exception:
+        return ""
+    texts = [text for _box, text, _score in _rows(result) if str(text).strip()]
+    return texts[0].strip() if texts else ""
+
+
 def _green_mask(bgr: np.ndarray) -> np.ndarray:
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
     return cv2.inRange(hsv, (35, 40, 125), (100, 255, 255))

@@ -244,6 +244,23 @@ def _short_name(norm: str, lexicon: Lexicon) -> str | None:
     return None
 
 
+def remainder_of(raw: str, full: str, highlight: str) -> str | None:
+    """Letters the game still wants after a known phrase was partly accepted.
+
+    A whole highlighted word such as FROM still means the sentence has not
+    started. LLECTION is only the tail of COLLECTION, so that tail is enough.
+    """
+    frag = normalize(highlight)
+    if len(frag) < 4 or not full.endswith(frag) or frag == full:
+        return None
+    words = [normalize(part) for part in re.split(r"[^a-zA-Z0-9]+", raw) if part.strip()]
+    if any(word == frag for word in words):
+        return None
+    if any(len(word) > len(frag) and word.endswith(frag) for word in words):
+        return frag
+    return None
+
+
 def decide(raw: str, conf: float, lexicon: Lexicon, raw_confidence: float) -> tuple[str, bool] | None:
     # Check the raw token first so a trailing digit inside Ke2 or Io's "10"
     # is not thrown away as a point value.

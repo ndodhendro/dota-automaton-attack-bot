@@ -16,7 +16,8 @@ from automaton_bot.capture import Screen
 from automaton_bot.config import CONFIG_PATH, ROOT, active_region, load_config, save_config
 from automaton_bot.tracker import Tracker
 from automaton_bot.typer import Typer, foreground_is_us, mouse_in_failsafe_corner
-from automaton_bot.words import Lexicon, group_phrases, normalize, split_by_danger, to_detections
+from automaton_bot.vision import highlights, read_highlight
+from automaton_bot.words import Lexicon, group_phrases, normalize, remainder_of, split_by_danger, to_detections
 
 VK = {
     "F7": 0x76,
@@ -176,12 +177,13 @@ def _process_frame(frame, reader, lexicon: Lexicon, cfg: dict, state: dict) -> b
     high = [blob for blob in blobs if blob.cy < cutoff]
     low_dets = _recognize(reader, frame, low, lexicon, cfg)
     low_dets.sort(key=lambda det: -det.cy)
+    shown = _highlights(reader, frame, cfg) if state["armed"] or state["preview"] else []
     if state["armed"]:
-        _type_dets(low_dets, state)
+        _type_dets(low_dets, state, shown)
     high_dets = _recognize(reader, frame, high, lexicon, cfg) if state["armed"] or state["preview"] else []
     high_dets.sort(key=lambda det: (len(det.text), -det.cy))
     if state["armed"]:
-        _type_dets(high_dets, state)
+        _type_dets(high_dets, state, shown)
     if state["preview"] and not state["armed"]:
         _show_preview(frame, reader.mask(frame), low_dets + high_dets, state)
     elif state["window"]:
@@ -205,7 +207,29 @@ def _recognize(reader, frame, blobs, lexicon: Lexicon, cfg: dict):
     )
 
 
-def _type_dets(dets, state: dict) -> None:
+def _highlights(reader, frame, cfg: dict) -> list[str]:
+    try:
+        blobs = highlights(frame, float(cfg["hud_top_ratio"]))
+    except Exception as exc:
+        print(f"Sorotan gagal: {exc}")
+        return []
+    found: list[str] = []
+    for blob in blobs:
+        text = read_highlight(reader, frame, blob)
+        if normalize(text):
+            found.append(text)
+    return found
+
+
+def _tail(det, shown: list[str]) -> str:
+    for text in shown:
+        tail = remainder_of(det.raw, det.text, text)
+        if tail:
+            return tail
+    return ""
+
+
+def _type_dets(dets, state: dict, shown: list[str] | None = None) -> None:
     emitted: set[int] = set()
     for det in dets:
         if not state["armed"]:
@@ -218,14 +242,22 @@ def _type_dets(dets, state: dict) -> None:
         track = state["tracker"].observe(det)
         if track is None or id(track) in emitted:
             continue
+        send = track.pending or _tail(det, shown or [])
+        if not send:
+            if track.typed and track.text != det.text:
+                continue
+            send = det.text
         if foreground_is_us():
             if not state["focus_warned"]:
                 print("Fokuskan jendela Dota. Ketikan ditunda selama console ini yang di depan.")
                 state["focus_warned"] = True
             return
         state["focus_warned"] = False
+        if send != det.text:
+            track.retries = state["tracker"].max_retries
+        track.pending = ""
         try:
-            state["typer"].type_word(det.text)
+            state["typer"].type_word(send)
         except OSError as exc:
             print(f"Gagal mengirim tombol: {exc}")
             print("Kalau Dota jalan sebagai administrator, jalankan bot ini sebagai administrator juga.")
@@ -233,13 +265,13 @@ def _type_dets(dets, state: dict) -> None:
             return
         state["tracker"].mark_typed(track)
         emitted.add(id(track))
-        if det.conf >= 0.99 and normalize(det.raw) == det.text:
+        if det.conf >= 0.99 and normalize(det.raw) == det.text and send == det.text:
             added = state["lexicon"].remember(det.text, det.conf)
             if added:
                 print(f"kamus + {added}")
         kind = "kamus" if det.lexicon else "ocr"
         retry = " ulang" if track.retries else ""
-        print(f"ketik {det.text:<24} y={int(det.cy):4d}  {det.conf:.2f}  {kind}{retry}")
+        print(f"ketik {send:<24} y={int(det.cy):4d}  {det.conf:.2f}  {kind}{retry}")
 
 
 def _show_preview(frame, mask, dets, state: dict) -> None:

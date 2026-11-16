@@ -38,6 +38,7 @@ class Track:
     retries: int = 0
     typed_at: float = 0.0
     last_seen: float = 0.0
+    pending: str = ""
 
 
 class Tracker:
@@ -74,6 +75,12 @@ class Tracker:
                     occupied.text = det.text
                     occupied.conf = det.conf
                     self._touch(occupied, det, now)
+                    return occupied
+                if occupied.typed and det.text.startswith(occupied.text) and len(det.text) > len(occupied.text):
+                    occupied.pending = det.text[len(occupied.text) :]
+                    occupied.text = det.text
+                    occupied.conf = max(occupied.conf, det.conf)
+                    occupied.last_seen = now
                     return occupied
                 occupied.last_seen = now
                 return None
