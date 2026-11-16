@@ -13,6 +13,18 @@ def _contains(longer: str, shorter: str) -> bool:
     return len(shorter) >= 4 and shorter in longer
 
 
+def _related(a: str, b: str) -> bool:
+    """True when the new read is the same label with overlapping ink, not the next one."""
+    if _contains(a, b) or _contains(b, a):
+        return True
+    shared = 0
+    for left, right in zip(a, b):
+        if left != right:
+            break
+        shared += 1
+    return shared >= 8
+
+
 @dataclass
 class Track:
     text: str
@@ -50,12 +62,19 @@ class Tracker:
         track = self._match(det)
         if track is None:
             occupied = self._match_place(det)
-            if occupied is not None:
-                # Two labels are on top of each other. Keep the clean phrase
-                # and do not type the mixed OCR result.
-                if len(det.text) > len(occupied.text) and det.conf >= occupied.conf and _contains(det.text, occupied.text):
+            if occupied is not None and _related(occupied.text, det.text):
+                # Overlapping ink of the label already in hand. A different
+                # phrase that spawned here is not related and is typed below.
+                if (
+                    not occupied.typed
+                    and len(det.text) > len(occupied.text)
+                    and det.conf >= occupied.conf
+                    and _contains(det.text, occupied.text)
+                ):
                     occupied.text = det.text
                     occupied.conf = det.conf
+                    self._touch(occupied, det, now)
+                    return occupied
                 occupied.last_seen = now
                 return None
             track = Track(
@@ -69,7 +88,15 @@ class Tracker:
                 last_seen=now,
             )
             self.tracks.append(track)
-            return None
+            return track
+        self._touch(track, det, now)
+        if not track.typed:
+            return track
+        if track.retries < self.max_retries and now - track.typed_at >= self.retry_delay:
+            return track
+        return None
+
+    def _touch(self, track: Track, det: Det, now: float) -> None:
         track.cx = det.cx
         track.cy = det.cy
         track.w = det.w
@@ -77,11 +104,6 @@ class Tracker:
         track.conf = max(track.conf, det.conf)
         track.hits += 1
         track.last_seen = now
-        if not track.typed and track.hits >= 2:
-            return track
-        if track.typed and track.retries < self.max_retries and now - track.typed_at >= self.retry_delay:
-            return track
-        return None
 
     def mark_typed(self, track: Track, now: float | None = None) -> None:
         now = time.perf_counter() if now is None else now

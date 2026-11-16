@@ -188,7 +188,8 @@ def _under_sentence(blob: Blob, sentences: list[Blob]) -> bool:
         center = blob.x + blob.w / 2
         if not (sentence.x - 30 <= center <= sentence.x + sentence.w + 30):
             continue
-        if sentence.y - 10 <= blob.cy <= sentence.y + sentence.h + 170:
+        # Only the big decorative letters sitting directly under this sentence.
+        if sentence.y + sentence.h - 4 <= blob.y <= sentence.y + sentence.h + 90:
             return True
     return False
 
