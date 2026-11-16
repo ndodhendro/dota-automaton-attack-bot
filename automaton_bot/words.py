@@ -9,6 +9,7 @@ from pathlib import Path
 from rapidfuzz.distance import Levenshtein
 
 LEXICON_PATH = Path(__file__).with_name("lexicon.txt")
+LEARNED_PATH = Path(__file__).with_name("learned.txt")
 
 _PUNCT_TRANSLATION = str.maketrans({
     "\u2019": "",
@@ -124,23 +125,34 @@ def _is_numeric_token(text: str) -> bool:
 
 
 class Lexicon:
-    def __init__(self, words: set[str]) -> None:
+    def __init__(self, words: set[str], learned_path: Path | None = None) -> None:
         self.words = words
         self._keys = list(words)
+        self.learned_path = learned_path
 
     @classmethod
-    def load(cls, path: Path | None = None) -> "Lexicon":
+    def load(cls, path: Path | None = None, learned_path: Path | None = None) -> "Lexicon":
         path = path or LEXICON_PATH
-        words: set[str] = set()
-        if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                line = line.split("#", 1)[0].strip()
-                if not line:
-                    continue
-                norm = normalize(line)
-                if len(norm) >= 2:
-                    words.add(norm)
-        return cls(words)
+        learned_path = LEARNED_PATH if learned_path is None else learned_path
+        words = _read_word_file(path)
+        words.update(_read_word_file(learned_path))
+        return cls(words, learned_path)
+
+    def remember(self, text: str, conf: float) -> str | None:
+        """Store a clean high-confidence read so a later near-miss can snap to it."""
+        if conf < 0.99:
+            return None
+        norm = normalize(text)
+        if norm in self.words or norm in BLOCKLIST or _is_numeric_token(norm):
+            return None
+        if not (4 <= len(norm) <= 80) or not re.fullmatch(r"[a-z]+", norm) or not _has_vowel(norm):
+            return None
+        self.words.add(norm)
+        self._keys.append(norm)
+        if self.learned_path is not None:
+            with self.learned_path.open("a", encoding="utf-8") as handle:
+                handle.write(norm + "\n")
+        return norm
 
     def correct(self, norm: str) -> str | None:
         if norm in self.words:
@@ -169,6 +181,20 @@ class Lexicon:
         if len(ranked) > 1 and Levenshtein.distance(folded, ranked[1]) == best_dist:
             return None
         return ranked[0]
+
+
+def _read_word_file(path: Path) -> set[str]:
+    words: set[str] = set()
+    if not path.exists():
+        return words
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        norm = normalize(line)
+        if len(norm) >= 2:
+            words.add(norm)
+    return words
 
 
 def decide(raw: str, conf: float, lexicon: Lexicon, raw_confidence: float) -> tuple[str, bool] | None:

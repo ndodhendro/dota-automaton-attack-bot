@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+import tempfile
+
 from automaton_bot.tracker import Tracker
 from automaton_bot.words import (
     Det,
@@ -46,6 +49,15 @@ def run() -> None:
     _check(decide("lion", 0.95, lexicon, 0.8) == ("lion", False), "lion is not rewritten")
     _check(decide("lion", 0.4, lexicon, 0.8) is None, "weak unknown is dropped")
     _check(decide("starstorm", 0.9, lexicon, 0.8) == ("starstorm", False), "raw fallback")
+    with tempfile.TemporaryDirectory() as folder:
+        learned = Path(folder) / "learned.txt"
+        fresh = Lexicon(set(lexicon.words), learned)
+        _check(fresh.remember("kaya", 1.0) is None, "known word is not stored again")
+        _check(fresh.remember("stormwascoming", 0.98) is None, "below 99 percent stays out")
+        stored = fresh.remember("toldyouastormwascoming", 0.995)
+        _check(stored == "toldyouastormwascoming", "clean 99 percent read is stored")
+        again = Lexicon.load(Path(folder) / "missing.txt", learned)
+        _check(again.correct("toldyouastormwascomlng") == "toldyouastormwascoming", "later near-miss uses the stored phrase")
 
     pieces = [
         Piece("Ring", 0.95, 10, 40, 40, 18),

@@ -16,7 +16,7 @@ from automaton_bot.capture import Screen
 from automaton_bot.config import CONFIG_PATH, ROOT, active_region, load_config, save_config
 from automaton_bot.tracker import Tracker
 from automaton_bot.typer import Typer, foreground_is_us, mouse_in_failsafe_corner
-from automaton_bot.words import Lexicon, group_phrases, split_by_danger, to_detections
+from automaton_bot.words import Lexicon, group_phrases, normalize, split_by_danger, to_detections
 
 VK = {
     "F7": 0x76,
@@ -71,6 +71,7 @@ def _live(cfg: dict) -> int:
         "region": region,
         "tracker": _new_tracker(cfg),
         "typer": Typer(cfg["key_hold_ms"], cfg["key_interval_ms"], cfg["inter_word_ms"]),
+        "lexicon": lexicon,
         "focus_warned": False,
         "started": None,
     }
@@ -232,6 +233,10 @@ def _type_dets(dets, state: dict) -> None:
             return
         state["tracker"].mark_typed(track)
         emitted.add(id(track))
+        if det.conf >= 0.99 and normalize(det.raw) == det.text:
+            added = state["lexicon"].remember(det.text, det.conf)
+            if added:
+                print(f"kamus + {added}")
         kind = "kamus" if det.lexicon else "ocr"
         retry = " ulang" if track.retries else ""
         print(f"ketik {det.text:<24} y={int(det.cy):4d}  {det.conf:.2f}  {kind}{retry}")
