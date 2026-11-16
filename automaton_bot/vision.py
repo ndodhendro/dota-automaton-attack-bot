@@ -16,6 +16,7 @@ class Blob:
     y: int
     w: int
     h: int
+    upscale: int = 2
 
     @property
     def cy(self) -> float:
@@ -77,8 +78,11 @@ class Reader:
             if _ink_runs(roi) < 2:
                 continue
             found.append(Blob(x, y, w, h))
+        sentences = _sentence_blobs(frame, scale, hud_cut)
         found.sort(key=lambda blob: blob.cy, reverse=True)
-        return found[:12]
+        # Keep every full-sentence line. Those sit above the big letters and
+        # are the only place the whole 2-3 line phrase is written out.
+        return sentences + found[:10]
 
     def read_blobs(self, frame: np.ndarray, blobs: list[Blob]) -> list[Piece]:
         pieces: list[Piece] = []
@@ -96,10 +100,15 @@ class Reader:
         crop = frame[y0:y1, x0:x1]
         if crop.size == 0:
             return []
-        mask = _text_mask(crop)
+        if blob.upscale >= 4:
+            hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+            mask = cv2.inRange(hsv, (35, 40, 125), (100, 255, 255))
+        else:
+            mask = _text_mask(crop)
         canvas = np.full_like(crop, 255)
         canvas[mask > 0] = (0, 0, 0)
-        canvas = cv2.resize(canvas, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        scale = blob.upscale
+        canvas = cv2.resize(canvas, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
         canvas = cv2.copyMakeBorder(canvas, 8, 8, 8, 8, cv2.BORDER_CONSTANT, value=(255, 255, 255))
         try:
             result = self._ocr(canvas, use_det=False, use_cls=False)
@@ -129,6 +138,31 @@ def _ink_runs(roi: np.ndarray) -> int:
         elif not value:
             inside = False
     return runs
+
+
+def _sentence_blobs(frame: np.ndarray, scale: float, hud_cut: float) -> list[Blob]:
+    """The small green line that spells the whole falling phrase."""
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    green = cv2.inRange(hsv, (35, 40, 125), (100, 255, 255))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(11, int(15 * scale)), 2))
+    joined = cv2.dilate(green, kernel)
+    count, _, stats, _ = cv2.connectedComponentsWithStats(joined, 8)
+    min_h = max(7, int(8 * scale))
+    max_h = max(min_h + 4, int(24 * scale))
+    found: list[Blob] = []
+    for index in range(1, count):
+        x, y, w, h = (int(v) for v in stats[index][:4])
+        if h < min_h or h > max_h or w < int(120 * scale):
+            continue
+        if w / float(h) < 8:
+            continue
+        if (y + h / 2) < hud_cut:
+            continue
+        roi = green[y : y + h, x : x + w]
+        if roi.size == 0 or _ink_runs(roi) < 6:
+            continue
+        found.append(Blob(x, y, w, h, upscale=4))
+    return found
 
 
 def _text_mask(bgr: np.ndarray) -> np.ndarray:

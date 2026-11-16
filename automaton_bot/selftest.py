@@ -62,6 +62,24 @@ def run() -> None:
     kaya = next(det for det in dets if det.text == "kaya")
     _check(kaya.y == 200, "dedup kept the stronger kaya")
 
+    wrapped = to_detections(
+        group_phrases([
+            Piece("WE HAVE MORE WHERE THAT CAME FROM.", 0.99, 276, 553, 294, 12),
+            Piece("FROM", 0.99, 370, 648, 109, 28),
+            Piece("DEMON EATER", 0.92, 80, 700, 180, 28),
+            Piece("TOLD YOU A STORM", 0.96, 500, 140, 280, 30),
+            Piece("WAS COMING!", 0.99, 540, 190, 220, 30),
+        ]),
+        lexicon,
+        0.4,
+        0.8,
+    )
+    wrapped_text = sorted(det.text for det in wrapped)
+    _check(
+        wrapped_text == ["demoneater", "toldyouastormwascoming", "wehavemorewherethatcamefrom"],
+        f"wrapped lines {wrapped_text}",
+    )
+
     danger, safe = split_by_danger(
         [
             Det("kaya", 0.9, 0, 10, 40, 16, True, "kaya"),

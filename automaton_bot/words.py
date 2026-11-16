@@ -176,7 +176,7 @@ def decide(raw: str, conf: float, lexicon: Lexicon, raw_confidence: float) -> tu
     norm = normalize(cleaned)
     if not norm or norm in BLOCKLIST or _is_numeric_token(norm):
         return None
-    if len(norm) > 48:
+    if len(norm) > 80:
         return None
 
     suggestion = lexicon.correct(norm)
@@ -240,7 +240,77 @@ def group_phrases(pieces: list[Piece]) -> list[Piece]:
                 phrases.append(_join(current))
                 current = [nxt]
         phrases.append(_join(current))
-    return phrases
+    return _stack_lines(phrases)
+
+
+def _stack_lines(phrases: list[Piece]) -> list[Piece]:
+    """Join the 2-3 wrapped lines of one falling label, top to bottom.
+
+    A short bright line such as FROM is the same label as the small sentence
+    above it. A label sitting somewhere else on the board stays separate.
+    """
+    if len(phrases) < 2:
+        return phrases
+    phrases = sorted(phrases, key=lambda phrase: phrase.cy)
+    used = [False] * len(phrases)
+    stacked: list[Piece] = []
+    for index, phrase in enumerate(phrases):
+        if used[index]:
+            continue
+        group = [phrase]
+        used[index] = True
+        grew = True
+        while grew:
+            grew = False
+            cover = _join(group)
+            for other_index, other in enumerate(phrases):
+                if used[other_index] or not _same_label(cover, other):
+                    continue
+                group.append(other)
+                used[other_index] = True
+                grew = True
+        stacked.append(_collapse_wrapped(group))
+    return stacked
+
+
+def _same_label(cover: Piece, other: Piece) -> bool:
+    overlap = min(cover.x + cover.w, other.x + other.w) - max(cover.x, other.x)
+    narrower = min(cover.w, other.w)
+    centers = abs(cover.cx - other.cx)
+    aligned = narrower > 0 and (overlap >= narrower * 0.45 or centers <= max(cover.w, other.w) * 0.35)
+    if not aligned:
+        return False
+    if other.y >= cover.y + cover.h:
+        gap = other.y - (cover.y + cover.h)
+    elif cover.y >= other.y + other.h:
+        gap = cover.y - (other.y + other.h)
+    else:
+        gap = 0
+    return gap <= max(96, max(cover.h, other.h) * 3.2)
+
+
+def _collapse_wrapped(group: list[Piece]) -> Piece:
+    ordered = sorted(group, key=lambda phrase: phrase.y)
+    if len(ordered) == 1:
+        return ordered[0]
+    ranked = sorted(
+        ((phrase, normalize(_strip_trailing_score(phrase.raw))) for phrase in ordered),
+        key=lambda item: len(item[1]),
+        reverse=True,
+    )
+    longest_piece, longest = ranked[0]
+    fragments_fit = all(len(text) < 4 or text in longest for _, text in ranked[1:])
+    cover = _join(ordered)
+    if longest and fragments_fit:
+        return Piece(
+            raw=longest_piece.raw,
+            conf=max(phrase.conf for phrase in ordered),
+            x=cover.x,
+            y=cover.y,
+            w=cover.w,
+            h=cover.h,
+        )
+    return cover
 
 
 def _join(parts: list[Piece]) -> Piece:
