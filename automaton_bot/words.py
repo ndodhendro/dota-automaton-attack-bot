@@ -182,6 +182,24 @@ class Lexicon:
             return None
         return ranked[0]
 
+    def complete(self, norm: str) -> str | None:
+        """Expand one wrapped line to the only longer phrase that contains it."""
+        folded = norm.translate(_OCR_TRANSLATION)
+        if len(folded) < 8 or folded in self.words:
+            return None
+        found: str | None = None
+        seen: set[str] = set()
+        for word in self._keys:
+            if word in seen or len(word) < len(folded) + 4:
+                continue
+            seen.add(word)
+            if folded not in word:
+                continue
+            if found is not None:
+                return None
+            found = word
+        return found
+
 
 def _read_word_file(path: Path) -> set[str]:
     words: set[str] = set()
@@ -214,6 +232,10 @@ def decide(raw: str, conf: float, lexicon: Lexicon, raw_confidence: float) -> tu
         if len(suggestion) <= 2 and conf < 0.75:
             return None
         return suggestion, True
+
+    completed = lexicon.complete(norm)
+    if completed is not None:
+        return completed, True
 
     if (
         conf >= raw_confidence

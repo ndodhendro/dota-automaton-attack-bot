@@ -58,6 +58,18 @@ def run() -> None:
         _check(stored == "toldyouastormwascoming", "clean 99 percent read is stored")
         again = Lexicon.load(Path(folder) / "missing.txt", learned)
         _check(again.correct("toldyouastormwascomlng") == "toldyouastormwascoming", "later near-miss uses the stored phrase")
+        _check(
+            decide("WAS COMING!", 0.91, fresh, 0.8) == ("toldyouastormwascoming", True),
+            "lower line types the whole phrase",
+        )
+        _check(
+            decide("TOLD YOU A STORM", 0.91, fresh, 0.8) == ("toldyouastormwascoming", True),
+            "upper line types the whole phrase",
+        )
+        _check(decide("luna", 0.9, fresh, 0.8)[0] == "luna", "exact short label stays")
+        _check(decide("storm", 0.95, fresh, 0.8) == ("storm", False), "a short slice stays as read")
+        fresh.remember("iknewastormwascoming", 1.0)
+        _check(decide("STORM WAS COMING", 0.95, fresh, 0.8) == ("stormwascoming", False), "shared slice is not guessed")
 
     pieces = [
         Piece("Ring", 0.95, 10, 40, 40, 18),
